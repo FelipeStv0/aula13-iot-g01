@@ -41,10 +41,11 @@ let refreshing=false;
 async function refresh(){
 if(refreshing)return;refreshing=true;$("reload").disabled=true;$("reload").textContent="Consultando...";$("refresh-status").textContent="Consultando API...";
 const previous=readings[0]?.message_id;
-try{const qs=new URLSearchParams({select:"device_id,message_id,value,unit,alert,received_at",device_id:"eq.esp32_g01",order:"received_at.desc,id.desc",limit:"50"});
-const response=await fetch(root+"/rest/v1/readings?"+qs.toString(),{headers:{"apikey":apikey,"accept":"application/json"},cache:"no-store"});
+const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),8000);
+try{const qs=new URLSearchParams({select:"device_id,message_id,value,unit,alert,received_at",device_id:"eq.esp32_g01",and:"(message_id.not.like.demo-seed-*,message_id.not.like.api-probe-*)",order:"received_at.desc,id.desc",limit:"50"});
+const response=await fetch(root+"/rest/v1/readings?"+qs.toString(),{headers:{"apikey":apikey,"accept":"application/json"},cache:"no-store",signal:controller.signal});
 if(!response.ok)throw Error("HTTP "+response.status);
-const value=await response.json();if(!Array.isArray(value))throw Error("Resposta inesperada");readings=value;lastError="";paintChart();paintTable();$("refresh-status").textContent="Consulta: "+new Date().toLocaleTimeString("pt-BR")+" — "+(!readings.length?"sem registros":previous===readings[0].message_id?"sem novas leituras":"leitura atualizada");
-}catch(e){lastError=String(e.message||e);$("refresh-status").textContent="Falha na consulta: "+lastError}finally{refreshing=false;$("reload").disabled=false;$("reload").textContent="Atualizar agora";paint();}}
+const value=await response.json();if(!Array.isArray(value))throw Error("Resposta inesperada");readings=value.filter(r=>!String(r.message_id).startsWith("demo-seed-")&&!String(r.message_id).startsWith("api-probe-"));lastError="";paintChart();paintTable();$("refresh-status").textContent="Consulta: "+new Date().toLocaleTimeString("pt-BR")+" — "+(!readings.length?"sem telemetria do sensor":previous===readings[0].message_id?"sem novas leituras":"leitura atualizada");
+}catch(e){lastError=e.name==="AbortError"?"tempo limite de 8 s":String(e.message||e);$("refresh-status").textContent="Falha na consulta: "+lastError}finally{clearTimeout(timeout);refreshing=false;$("reload").disabled=false;$("reload").textContent="Atualizar agora";paint();}}
 $("reload").onclick=refresh;refresh();setInterval(refresh,10000);setInterval(paint,1000);
 </script></body></html>
