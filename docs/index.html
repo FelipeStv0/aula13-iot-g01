@@ -5,7 +5,7 @@
 <div class="grid"><section class="card"><h2>Temperatura média</h2><div id="reading">— <span>°C</span></div><div class="meta"><div><div class="label">Última atualização</div><div id="last" class="number">—</div></div><div><div class="label">Idade da leitura</div><div id="age" class="number">—</div></div></div><p>Dispositivo: esp32_g01</p><p id="origin">Aguardando transmissão do sensor.</p></section>
 <section class="card"><h2>Condição de alerta</h2><div id="level">Sem dados</div><p id="details">Aguardando a primeira leitura...</p><div class="notice" id="stale">Nenhuma leitura recebida.</div><div class="meta"><div><div class="label">Aviso</div><div class="number">≥ 70 °C</div></div><div><div class="label">Crítico</div><div class="number">≥ 90 °C</div></div><div><div class="label">Histerese</div><div class="number">65 °C / 85 °C</div></div></div></section>
 <section class="card full"><h2>Histórico • até 50 registros</h2><svg id="chart" class="graph" viewBox="0 0 880 220" role="img" aria-label="Histórico de temperatura"><text x="22" y="110" fill="#a6bbb2">Aguardando leituras</text></svg></section>
-<section class="card full"><h2>Leituras armazenadas</h2><div class="overflow"><table><thead><tr><th>Recebida em</th><th>Temperatura</th><th>Alerta</th><th>Mensagem</th></tr></thead><tbody id="rows"><tr><td colspan="4">Sem registros</td></tr></tbody></table></div></section></div>
+<section class="card full"><h2>Leituras armazenadas</h2><div class="overflow"><table><thead><tr><th>Recebida em</th><th>Temperatura</th><th>Alerta</th><th>Mensagem / origem</th></tr></thead><tbody id="rows"><tr><td colspan="4">Sem registros</td></tr></tbody></table></div></section></div>
 <footer>Valores simulados; não representam temperaturas reais de uma placa-mãe. Consulta à API REST a cada 10 s; marca como desatualizado após 35 s. Os dados são preservados no PostgreSQL mesmo sem navegador aberto.</footer></main>
 <script>
 "use strict";
@@ -17,7 +17,7 @@ let readings=[],lastError="";
 const fmt=iso=>iso?new Date(iso).toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo",dateStyle:"short",timeStyle:"medium"}):"—";
 function paint(){
 const first=readings[0];
-$("origin").textContent=first?(String(first.message_id).startsWith("demo-seed-")?"Origem: registro de ensaio inserido no banco — não enviado pelo Wokwi.":"Origem: telemetria registrada pela API (confira o ID no console do ESP32)."):"Aguardando transmissão do sensor.";
+$("origin").textContent=first?(String(first.message_id).startsWith("demo-seed-")?"Origem: registro de ensaio inserido no banco — não enviado pelo Wokwi.":String(first.message_id).startsWith("api-probe-")?"Origem: teste de integração HTTP da API — não enviado pelo Wokwi.":"Origem: telemetria registrada pela API (confira o ID no console do ESP32)."):"Aguardando transmissão do sensor.";
 const age=first?Date.now()-new Date(first.received_at).getTime():Infinity;
 $("reading").innerHTML=first?Number(first.value).toFixed(1)+" <span>°C</span>":"— <span>°C</span>";
 $("last").textContent=first?fmt(first.received_at):"—";
@@ -36,7 +36,7 @@ const p=ordered.map((r,i)=>[36+i*812/Math.max(1,ordered.length-1),195-(Number(r.
 const line=document.createElementNS("http://www.w3.org/2000/svg","polyline");line.setAttribute("points",p.map(x=>x.join(",")).join(" "));line.setAttribute("stroke","#a0e0b8");line.setAttribute("stroke-width","3");line.setAttribute("stroke-linecap","round");line.setAttribute("fill","none");s.appendChild(line);
 }
 function paintTable(){const t=$("rows");t.replaceChildren();if(!readings.length){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=4;td.textContent="Nenhuma leitura armazenada";tr.appendChild(td);t.appendChild(tr);return;}
-for(const r of readings){const tr=document.createElement("tr");for(const v of [fmt(r.received_at),Number(r.value).toFixed(1)+" °C",labels[r.alert]||r.alert,r.message_id]){const td=document.createElement("td");td.textContent=String(v);tr.appendChild(td)}t.appendChild(tr)}}
+for(const r of readings){const tr=document.createElement("tr");for(const v of [fmt(r.received_at),Number(r.value).toFixed(1)+" °C",labels[r.alert]||r.alert,String(r.message_id)+(String(r.message_id).startsWith("demo-seed-")?" (ensaio SQL)":String(r.message_id).startsWith("api-probe-")?" (teste API)":" (dispositivo)")]){const td=document.createElement("td");td.textContent=String(v);tr.appendChild(td)}t.appendChild(tr)}}
 async function refresh(){
 try{const qs=new URLSearchParams({select:"device_id,message_id,value,unit,alert,received_at",device_id:"eq.esp32_g01",order:"received_at.desc,id.desc",limit:"50"});
 const response=await fetch(root+"/rest/v1/readings?"+qs.toString(),{headers:{"apikey":apikey,"accept":"application/json"},cache:"no-store"});
