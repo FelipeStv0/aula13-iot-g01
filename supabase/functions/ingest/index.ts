@@ -7,12 +7,13 @@ Deno.serve(async(request:Request)=>{
  const secret=Deno.env.get("INGEST_KEY"),url=Deno.env.get("SUPABASE_URL")?.replace(/\/+$/,"");
  const key=Deno.env.get("SUPABASE_SECRET_KEY")||Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
  if(!secret||!url||!key){console.error("ingest configuration missing",{hasSecret:!!secret,hasUrl:!!url,hasAdminKey:!!key});return json({error:"server_not_configured"},503);}
- if(!equalSecret(request.headers.get("x-ingest-key")??"",secret))return json({error:"unauthorized"},401);
+ const supplied=request.headers.get("x-ingest-key")??"";
+ if(!equalSecret(supplied,secret))return json({error:"unauthorized"},401);
  const declaredLength=Number(request.headers.get("content-length")??0);
  if(declaredLength>8192)return json({error:"body_too_large"},413);
  let data:Record<string,unknown>;
  try{const raw=await request.text();if(new TextEncoder().encode(raw).length>8192)return json({error:"body_too_large"},413);const parsed:unknown=JSON.parse(raw);if(!parsed||typeof parsed!=="object"||Array.isArray(parsed))throw Error("invalid");data=parsed as Record<string,unknown>;}catch{return json({error:"invalid_json"},400);}
- if(!validId(data.device_id)||data.device_id!=="esp32_g01"||typeof data.message_id!=="string"||!/^[A-Za-z0-9_-]{3,80}$/.test(data.message_id)||data.measurement!=="temperature"||data.unit!=="C"||!validTemp(data.value)||!validTemp(data.raw_value)||!["normal","warning","critical"].includes(String(data.alert))||typeof data.sample_count!=="number"||!Number.isInteger(data.sample_count)||data.sample_count<1||data.sample_count>3)return json({error:"invalid_payload"},400);
+ if(!validId(data.device_id)||data.device_id!=="esp32_g01"||typeof data.message_id!=="string"||!/^[A-Za-z0-9_-]{3,80}$/.test(data.message_id)||data.measurement!=="temperature"||data.unit!=="C"||!validTemp(data.value)||!validTemp(data.raw_value)||(typeof data.alert!=="string"||!["normal","warning","critical"].includes(data.alert))||typeof data.sample_count!=="number"||!Number.isInteger(data.sample_count)||data.sample_count<1||data.sample_count>3)return json({error:"invalid_payload"},400);
  const row={device_id:data.device_id,message_id:data.message_id,measurement:"temperature",value:data.value,raw_value:data.raw_value,unit:"C",alert:data.alert,sample_count:data.sample_count};
  const headers:Record<string,string>={"apikey":key,"content-type":"application/json","prefer":"resolution=ignore-duplicates,return=representation"};
  if(!key.startsWith("sb_secret_"))headers.authorization="Bearer "+key;
