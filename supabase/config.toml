@@ -1,0 +1,4 @@
+[functions.ingest]
+verify_jwt = false
+[functions.dashboard]
+verify_jwt = false
