@@ -114,7 +114,7 @@ def get_tls_context():
     return tls_context
 
 
-def post(payload, key):
+def post(payload):
     if time.localtime()[0] < 2024:
         import ntptime
         ntptime.settime()
@@ -130,8 +130,8 @@ def post(payload, key):
         tls = context.wrap_socket(sock, server_hostname=HOST,
                                   do_handshake_on_connect=True)
         body = json.dumps(payload).encode()
-        req = ("POST /functions/v1/ingest HTTP/1.1\r\nHost: " + HOST +
-               "\r\nContent-Type: application/json\r\nx-ingest-key: " + key +
+        req = ("POST /functions/v1/ingest-demo HTTP/1.1\r\nHost: " + HOST +
+               "\r\nContent-Type: application/json" +
                "\r\nConnection: close\r\nContent-Length: " + str(len(body)) +
                "\r\n\r\n").encode() + body
         sent = 0
@@ -159,7 +159,7 @@ def post(payload, key):
 
 
 def make_payload(samples, state, boot, seq):
-    return dict(device_id="esp32_g01", message_id=boot+"-"+str(seq),
+    return dict(device_id="esp32_g01", message_id="wokwi-demo-"+boot+"-"+str(seq),
                 measurement="temperature", value=round(sum(samples)/len(samples),2),
                 raw_value=samples[-1], unit="C", alert=state, sample_count=len(samples))
 
@@ -171,18 +171,12 @@ def main():
         raise RuntimeError("DS18B20 ausente no GPIO4")
     yellow = Pin(19, Pin.OUT, value=0)
     red = Pin(18, Pin.OUT, value=0)
-    print("VRM G01 v6 | TLS multi-CA | DS18B20 encontrado")
-    print("Chave de ingestao: use uma chave exclusiva do projeto simulado.")
-    print("Enter vazio = modo local. Nunca publique a chave no codigo.")
-    key = input("Chave: ").strip()
-    if key and (len(key) < 16 or any(c in key for c in "\r\n")):
-        raise ValueError("Chave invalida")
-    if not key:
-        print("MODO LOCAL: sem transmissao HTTPS")
+    print("VRM G01 v7 | demonstracao publica limitada | DS18B20 encontrado")
+    print("Envio automatico: nenhuma chave precisa ser digitada.")
     sta = network.WLAN(network.STA_IF)
     link = WifiLink(sta)
     samples, state = [], "normal"
-    boot = "%08x" % random.getrandbits(32)
+    boot = "%08x" % (random.getrandbits(32) or 1)
     seq, pending = 0, None
     last_sample = time.ticks_add(time.ticks_ms(), -2000)
     last_send = time.ticks_add(time.ticks_ms(), -10000)
@@ -213,19 +207,22 @@ def main():
                     print("Leitura invalida")
             except Exception as exc:
                 print("Sensor:",exc)
-        online = link.tick(time.ticks_ms()) if key else False
+        online = link.tick(time.ticks_ms())
         if online and samples and time.ticks_diff(time.ticks_ms(),last_send)>=10000:
             if pending is None:
                 seq += 1
                 pending = make_payload(samples,state,boot,seq)
             try:
-                status = post(pending,key)
+                status = post(pending)
                 print("POST",pending["message_id"],"HTTP",status)
                 if status in (200,201,400,413):
                     pending = None
-                elif status in (401,403):
-                    print("Chave recusada. Reinicie para corrigir; modo local.")
-                    key, pending = "", None
+                elif status == 429:
+                    print("Limite do modo demo; nova tentativa em 10 s.")
+                elif status == 410:
+                    print("Demonstracao expirada; sensor continua em modo local.")
+                    pending = None
+                    last_send = time.ticks_ms()
             except Exception as exc:
                 print("HTTPS falhou; nova tentativa em 10 s:",exc)
             finally:
