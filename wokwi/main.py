@@ -31,12 +31,24 @@ def alert(avg, prev):
 
 def connect():
     if not wifi.isconnected():
+        # Reset the station before retrying, including a failed association.
+        wifi.active(False)
+        time.sleep_ms(500)
+        wifi.active(True)
+        time.sleep_ms(500)
+        print("Wi-Fi: conectando a Wokwi-GUEST...")
         wifi.connect("Wokwi-GUEST", "")
         begin = time.ticks_ms()
+        last_log = begin
         while not wifi.isconnected():
-            if time.ticks_diff(time.ticks_ms(), begin) > 15000:
-                raise OSError("Wi-Fi timeout")
+            now = time.ticks_ms()
+            if time.ticks_diff(now, last_log) >= 5000:
+                print("Wi-Fi status:", wifi.status())
+                last_log = now
+            if time.ticks_diff(now, begin) >= 45000:
+                raise OSError("Wi-Fi timeout; status=" + str(wifi.status()))
             time.sleep_ms(200)
+        print("Wi-Fi conectado | IP:", wifi.ifconfig()[0])
     if time.localtime()[0] < 2024:
         import ntptime
         ntptime.settime()
