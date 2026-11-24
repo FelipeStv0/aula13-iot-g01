@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>VRM Monitor | IoT G01</title>
+<style>:root{font-family:system-ui,Arial,sans-serif;color:#e8eee9;background:#101716}*{box-sizing:border-box}body{margin:0}main{max-width:1060px;margin:auto;padding:38px 20px}h1{font-size:clamp(30px,5vw,48px);letter-spacing:-.04em;margin:6px 0 8px}p{color:#a6bbb2;margin:6px 0}.sub{color:#afd9ba;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.head{display:flex;justify-content:space-between;align-items:start;gap:14px;flex-wrap:wrap;margin-bottom:28px}.grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}.card{padding:23px;border:1px solid #344b42;border-radius:16px;background:#192420}.card.full{grid-column:1/-1}h2{font-size:16px;margin:0 0 16px}#reading{font-size:clamp(54px,8vw,94px);font-weight:750;letter-spacing:-.09em;line-height:1.1;margin:12px 0}#reading span{font-size:24px;letter-spacing:0;color:#a6bbb2}.meta{display:flex;gap:28px;flex-wrap:wrap;margin-top:16px}.meta>div{min-width:120px}.label{color:#a6bbb2;font-size:13px}.number{font-weight:650;font-size:17px;margin-top:5px}#level{font-size:27px;font-weight:750;margin:8px 0}.normal{color:#94deb1}.warning{color:#ffd186}.critical{color:#ff9690}.notice{margin-top:15px;color:#ffd186}button{border:0;border-radius:9px;background:#bce9c5;color:#123022;padding:11px 17px;cursor:pointer;font-weight:700}.graph{width:100%;height:220px}table{width:100%;border-collapse:collapse;font-size:14px}th{text-align:left;color:#a6bbb2;font-size:12px}td,th{padding:10px;border-bottom:1px solid #32493f;white-space:nowrap}.overflow{overflow:auto}footer{font-size:12px;color:#96aa9f;margin-top:23px}@media(max-width:720px){.grid{grid-template-columns:1fr}.card{padding:18px}}</style></head>
+<body><main><div class="head"><div><div class="sub">Projeto Integrador • Arquitetura de Computadores</div><h1>VRM Monitor</h1><p>ESP32 + DS18B20 • telemetria simulada via HTTPS • Grupo G01</p></div><button id="reload">Atualizar agora</button></div>
+<div class="grid"><section class="card"><h2>Temperatura média</h2><div id="reading">— <span>°C</span></div><div class="meta"><div><div class="label">Última atualização</div><div id="last" class="number">—</div></div><div><div class="label">Idade da leitura</div><div id="age" class="number">—</div></div></div><p>Dispositivo: esp32_g01</p><p id="origin">Aguardando transmissão do sensor.</p></section>
+<section class="card"><h2>Condição de alerta</h2><div id="level">Sem dados</div><p id="details">Aguardando a primeira leitura...</p><div class="notice" id="stale">Nenhuma leitura recebida.</div><div class="meta"><div><div class="label">Aviso</div><div class="number">≥ 70 °C</div></div><div><div class="label">Crítico</div><div class="number">≥ 90 °C</div></div><div><div class="label">Histerese</div><div class="number">65 °C / 85 °C</div></div></div></section>
+<section class="card full"><h2>Histórico • até 50 registros</h2><svg id="chart" class="graph" viewBox="0 0 880 220" role="img" aria-label="Histórico de temperatura"><text x="22" y="110" fill="#a6bbb2">Aguardando leituras</text></svg></section>
+<section class="card full"><h2>Leituras armazenadas</h2><div class="overflow"><table><thead><tr><th>Recebida em</th><th>Temperatura</th><th>Alerta</th><th>Mensagem</th></tr></thead><tbody id="rows"><tr><td colspan="4">Sem registros</td></tr></tbody></table></div></section></div>
+<footer>Valores simulados; não representam temperaturas reais de uma placa-mãe. Consulta à API REST a cada 10 s; marca como desatualizado após 35 s. Os dados são preservados no PostgreSQL mesmo sem navegador aberto.</footer></main>
+<script>
+"use strict";
+const root="https://ckccllcmaepeamftkkew.supabase.co";
+const apikey="sb_publishable__7qsnNFZI0qj2w85dJyYRg_w1pxHhvo";
+const $=id=>document.getElementById(id);
+const labels={normal:"Normal",warning:"Aviso",critical:"Crítico"};
+let readings=[],lastError="";
+const fmt=iso=>iso?new Date(iso).toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo",dateStyle:"short",timeStyle:"medium"}):"—";
+function paint(){
+const first=readings[0];
+$("origin").textContent=first?(String(first.message_id).startsWith("demo-seed-")?"Origem: registro de ensaio inserido no banco — não enviado pelo Wokwi.":"Origem: telemetria registrada pela API (confira o ID no console do ESP32)."):"Aguardando transmissão do sensor.";
+const age=first?Date.now()-new Date(first.received_at).getTime():Infinity;
+$("reading").innerHTML=first?Number(first.value).toFixed(1)+" <span>°C</span>":"— <span>°C</span>";
+$("last").textContent=first?fmt(first.received_at):"—";
+$("age").textContent=first?Math.max(0,Math.floor(age/1000))+" s":"—";
+$("level").textContent=first?(labels[first.alert]||first.alert):"Sem dados";
+$("level").className=first?first.alert:"";
+$("details").textContent=first?"Última leitura recebida: "+String(first.message_id):"Aguardando a primeira leitura...";
+$("stale").textContent=lastError?"Erro na consulta REST: "+lastError:!first?"Aguardando primeira leitura":age>35000?"Dados desatualizados: simulador parado ou sem transmissão":"Transmissão atualizada";
+$("stale").style.color=lastError?"#ff9690":age>35000?"#ffd186":"#94deb1";
+}
+function paintChart(){
+const s=$("chart");s.replaceChildren();
+const ordered=readings.slice().reverse();if(!ordered.length){const t=document.createElementNS("http://www.w3.org/2000/svg","text");t.setAttribute("x","22");t.setAttribute("y","110");t.setAttribute("fill","#a6bbb2");t.textContent="Nenhuma leitura armazenada";s.appendChild(t);return;}
+const vals=ordered.map(x=>Number(x.value)),lo=Math.min(50,...vals)-5,hi=Math.max(100,...vals)+5;
+const p=ordered.map((r,i)=>[36+i*812/Math.max(1,ordered.length-1),195-(Number(r.value)-lo)*160/(hi-lo)]);
+const line=document.createElementNS("http://www.w3.org/2000/svg","polyline");line.setAttribute("points",p.map(x=>x.join(",")).join(" "));line.setAttribute("stroke","#a0e0b8");line.setAttribute("stroke-width","3");line.setAttribute("stroke-linecap","round");line.setAttribute("fill","none");s.appendChild(line);
+}
+function paintTable(){const t=$("rows");t.replaceChildren();if(!readings.length){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=4;td.textContent="Nenhuma leitura armazenada";tr.appendChild(td);t.appendChild(tr);return;}
+for(const r of readings){const tr=document.createElement("tr");for(const v of [fmt(r.received_at),Number(r.value).toFixed(1)+" °C",labels[r.alert]||r.alert,r.message_id]){const td=document.createElement("td");td.textContent=String(v);tr.appendChild(td)}t.appendChild(tr)}}
+async function refresh(){
+try{const qs=new URLSearchParams({select:"device_id,message_id,value,unit,alert,received_at",device_id:"eq.esp32_g01",order:"received_at.desc,id.desc",limit:"50"});
+const response=await fetch(root+"/rest/v1/readings?"+qs.toString(),{headers:{"apikey":apikey,"accept":"application/json"},cache:"no-store"});
+if(!response.ok)throw Error("HTTP "+response.status);
+const value=await response.json();if(!Array.isArray(value))throw Error("Resposta inesperada");readings=value;lastError="";paintChart();paintTable();
+}catch(e){lastError=String(e.message||e)}paint();}
+$("reload").onclick=refresh;refresh();setInterval(refresh,10000);setInterval(paint,1000);
+</script></body></html>
