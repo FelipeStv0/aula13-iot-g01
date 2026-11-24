@@ -6,8 +6,6 @@ Projeto integrador de Arquitetura de Computadores: ESP32 + DS18B20 no Wokwi, HTT
 
 - [Wokwi do grupo](https://wokwi.com/projects/481519064991846401): firmware v6 salvo e sensor verificado em modo local. O código `wokwi/main.py` foi sincronizado com o publicado.
 - [Painel GitHub Pages publicado](https://felipestv0.github.io/aula13-iot-g01/): frontend em `docs/index.html`.
-- API POST: https://ckccllcmaepeamftkkew.supabase.co/functions/v1/ingest
-- API REST GET: https://ckccllcmaepeamftkkew.supabase.co/rest/v1/readings
 
 Em 24/11/2026, um POST autenticado de diagnóstico obteve HTTP 201 e persistiu a mensagem `api-probe-20261124-01` (73 °C). A função temporária de diagnóstico foi desativada. Registros `demo-seed-*` são ensaios SQL. Nenhum dos dois comprova transmissão Wokwi.
 
