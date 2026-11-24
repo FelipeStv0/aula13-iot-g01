@@ -181,6 +181,7 @@ def main():
     last_sample = time.ticks_add(time.ticks_ms(), -2000)
     last_send = time.ticks_add(time.ticks_ms(), -10000)
     conversion = None
+    demo_active = True
     while True:
         now = time.ticks_ms()
         if conversion is None and time.ticks_diff(now,last_sample)>=2000:
@@ -207,7 +208,7 @@ def main():
                     print("Leitura invalida")
             except Exception as exc:
                 print("Sensor:",exc)
-        online = link.tick(time.ticks_ms())
+        online = link.tick(time.ticks_ms()) if demo_active else False
         if online and samples and time.ticks_diff(time.ticks_ms(),last_send)>=10000:
             if pending is None:
                 seq += 1
@@ -221,6 +222,7 @@ def main():
                     print("Limite do modo demo; nova tentativa em 10 s.")
                 elif status == 410:
                     print("Demonstracao expirada; sensor continua em modo local.")
+                    demo_active = False
                     pending = None
                     last_send = time.ticks_ms()
             except Exception as exc:
